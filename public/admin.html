@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin | Portfolio Manager</title>
+    <link rel="stylesheet" href="./css/style.css?v=2" />
+    <style>
+      #admin-panel {
+        max-width: 900px;
+        margin: 0 auto;
+        text-align: left;
+      }
+      .admin-section {
+        margin-bottom: 4rem;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 2rem;
+      }
+      #upload-form select,
+      #manage-category,
+      #portfolio-category,
+      #upload-form input[type="text"],
+      #upload-form input[type="file"],
+      #upload-form textarea,
+      #login-form input {
+        width: 100%;
+        max-width: 600px;
+        padding: 1rem;
+        border: 1px solid #e0e0e0;
+        background: #ffffff;
+        font-family: inherit;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+      }
+      #upload-status,
+      #login-status,
+      #category-status {
+        margin-top: 1.5rem;
+        font-size: 0.95rem;
+      }
+      .error {
+        color: #b00020;
+      }
+      .success {
+        color: #0a7a3b;
+      }
+      .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: normal;
+      }
+      .checkbox-group input {
+        width: auto;
+        margin: 0;
+      }
+      #login-view {
+        max-width: 400px;
+        margin: 4rem auto;
+        text-align: left;
+      }
+      #app-view {
+        display: none;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      .topbar button {
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+      }
+      .thumb-picker {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+        max-width: 600px;
+      }
+      .thumb-picker button {
+        padding: 0;
+        border: 2px solid transparent;
+        background: none;
+        cursor: pointer;
+        aspect-ratio: 1;
+        overflow: hidden;
+        width: 100%;
+        transition: opacity 0.15s ease;
+      }
+      .thumb-picker button img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .thumb-picker button:hover {
+        opacity: 0.8;
+      }
+      .thumb-picker button.selected {
+        border-color: #000;
+      }
+      #thumb-status {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+      #delete-category-btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+      }
+      #category-delete-status {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+      .portfolio-pick-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+        max-width: 100%;
+      }
+      .portfolio-pick-item {
+        position: relative;
+        aspect-ratio: 1;
+        overflow: hidden;
+        background: #f5f5f5;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: border-color 0.15s ease, opacity 0.15s ease;
+      }
+      .portfolio-pick-item:hover {
+        opacity: 0.85;
+      }
+      .portfolio-pick-item.featured {
+        border-color: #000;
+      }
+      .portfolio-pick-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .portfolio-pick-item .check {
+        position: absolute;
+        top: 0.4rem;
+        right: 0.4rem;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #000;
+        color: #fff;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+      }
+      .portfolio-pick-item.featured .check {
+        opacity: 1;
+      }
+      #portfolio-status {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body data-page="admin">
+    <header>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="portfolio.html">Portfolio</a>
+        <a href="browse.html">Browse</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Login view -->
+      <section id="login-view">
+        <h2>Admin Login</h2>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button type="submit">Log In</button>
+          <p id="login-status"></p>
+        </form>
+      </section>
+
+      <!-- Admin view -->
+      <section id="app-view">
+        <div id="admin-panel">
+          <div class="topbar">
+            <h2 style="margin: 0">Portfolio Manager</h2>
+            <button id="logout-btn" type="button">Log Out</button>
+          </div>
+
+          <div class="admin-section">
+            <h3>Upload New Image</h3>
+            <form id="upload-form">
+              <div class="form-group">
+                <label for="file">Image File (max 32 MB)</label>
+                <input type="file" id="file" accept="image/*" required />
+              </div>
+              <div class="form-group">
+                <label for="category">Category</label>
+                <select id="category" required>
+                  <option value="">Select a category</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="description">Description / Title</label>
+                <textarea
+                  id="description"
+                  rows="4"
+                  required
+                  placeholder="e.g. 'Sunset over the Atlas Mountains, 2024.'"
+                ></textarea>
+              </div>
+              <div class="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" id="add-to-portfolio" />
+                  Also add to Portfolio (favorites)
+                </label>
+              </div>
+              <button type="submit">Upload Image</button>
+              <p id="upload-status"></p>
+            </form>
+          </div>
+
+          <div class="admin-section">
+            <h3>Create New Category</h3>
+            <form id="category-form">
+              <div class="form-group">
+                <label for="new-category-name">Category Name</label>
+                <input
+                  type="text"
+                  id="new-category-name"
+                  required
+                  placeholder="e.g. 'Landscapes'"
+                />
+              </div>
+              <button type="submit">Add Category</button>
+              <p id="category-status"></p>
+            </form>
+          </div>
+
+          <div class="admin-section">
+            <h3>Set Category Thumbnail</h3>
+            <p style="color: #666">
+              Choose which image represents each category on the Browse page.
+            </p>
+            <div class="form-group">
+              <label for="thumb-category">Category</label>
+              <select id="thumb-category">
+                <option value="">Select a category</option>
+              </select>
+            </div>
+            <div id="thumb-images" class="thumb-picker" hidden></div>
+            <p id="thumb-status"></p>
+          </div>
+
+          <div class="admin-section">
+            <h3>Portfolio Images</h3>
+            <p style="color: #666">
+              Click an image to add or remove it from the featured portfolio.
+              Featured images have a black border and a check mark.
+            </p>
+            <div class="form-group">
+              <label for="portfolio-category">Category</label>
+              <select id="portfolio-category">
+                <option value="">Select a category</option>
+              </select>
+            </div>
+            <div id="portfolio-grid" class="portfolio-pick-grid" hidden></div>
+            <p id="portfolio-status"></p>
+          </div>
+
+          <div class="admin-section">
+            <h3>Manage Categories</h3>
+            <p style="color: #666">Delete categories you no longer use.</p>
+            <div class="form-group">
+              <label for="manage-category">Category</label>
+              <select id="manage-category">
+                <option value="">Select a category</option>
+              </select>
+            </div>
+            <button type="button" id="delete-category-btn">Delete Category</button>
+            <p id="category-delete-status"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p id="site-footer"></p>
+    </footer>
+
+    <script type="module">
+      import {
+        uploadImage,
+        createCategory,
+        compressIfNeeded,
+        setCategoryThumbnail,
+        deleteCategory,
+        togglePortfolio,
+      } from "./js/imgbb-uploader.js?v=5";
+      import { isLoggedIn, login, logout } from "./js/auth.js?v=2";
+
+      // ================================================================
+      // Element references
+      // ================================================================
+      const loginView = document.getElementById("login-view");
+      const appView = document.getElementById("app-view");
+
+      // ================================================================
+      // View routing
+      // ================================================================
+      function showLogin() {
+        loginView.style.display = "block";
+        appView.style.display = "none";
+      }
+
+      function showApp() {
+        loginView.style.display = "none";
+        appView.style.display = "block";
+        loadCategories();
+        loadThumbnailCategories();
+        loadPortfolioCategories();
+        renderManageCategories();
+      }
+
+      // ================================================================
+      // Shared fetchers
+      // ================================================================
+      const API_BASE =
+  location.hostname === "localhost" || location.hostname === "127.0.0.1"
+    ? "http://localhost:8000"
+    : "";
+
+async function fetchCategoryData() {
+  const res = await fetch(`${API_BASE}/api/data/categories`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to load categories");
+  return res.json();
+}
+
+async function fetchPortfolioData() {
+  const res = await fetch(`${API_BASE}/api/data/portfolio`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to load portfolio");
+  return res.json();
+}
+
+      async function fillCategoryDropdown(selectId) {
+        const select = document.getElementById(selectId);
+        const current = select.value;
+        select.innerHTML = '<option value="">Select a category</option>';
+        try {
+          const data = await fetchCategoryData();
+          (data.categories || [])
+            .slice()
+            .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+            .forEach((cat) => {
+              const opt = document.createElement("option");
+              opt.value = cat.id;
+              opt.textContent = cat.name;
+              select.appendChild(opt);
+            });
+          if (current) select.value = current;
+        } catch (err) {
+          console.error(`Failed to fill ${selectId}`, err);
+        }
+      }
+
+      // ================================================================
+      // Category dropdown shortcuts
+      // ================================================================
+      function loadCategories() {
+        return fillCategoryDropdown("category");
+      }
+      function loadThumbnailCategories() {
+        return fillCategoryDropdown("thumb-category");
+      }
+      function loadPortfolioCategories() {
+        return fillCategoryDropdown("portfolio-category");
+      }
+
+      // ================================================================
+      // Thumbnail picker
+      // ================================================================
+      async function renderThumbnailPicker(categoryId) {
+        const container = document.getElementById("thumb-images");
+        const status = document.getElementById("thumb-status");
+        container.innerHTML = "";
+        status.textContent = "";
+        status.className = "";
+
+        if (!categoryId) {
+          container.hidden = true;
+          return;
+        }
+
+        try {
+          const data = await fetchCategoryData();
+          const category = (data.categories || []).find(
+            (c) => c.id === categoryId,
+          );
+          const images = (data.images || []).filter(
+            (img) => img.category === categoryId,
+          );
+
+          if (!images.length) {
+            container.hidden = true;
+            status.textContent =
+              "No images in this category yet. Upload one first.";
+            return;
+          }
+
+          container.hidden = false;
+
+          const currentThumb = category?.thumbnail || "";
+          const currentResolved = currentThumb.startsWith("http")
+            ? currentThumb
+            : `./images/${currentThumb}`;
+
+          images.forEach((img) => {
+            const rawSrc = img.url || img.filename || "";
+            const resolved = rawSrc.startsWith("http")
+              ? rawSrc
+              : `./images/${rawSrc}`;
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.innerHTML = `<img src="${resolved}" alt="">`;
+
+            if (resolved === currentResolved) btn.classList.add("selected");
+
+            btn.addEventListener("click", async () => {
+              status.className = "";
+              status.textContent = "Saving…";
+              try {
+                await setCategoryThumbnail(categoryId, rawSrc);
+                container
+                  .querySelectorAll("button")
+                  .forEach((b) => b.classList.remove("selected"));
+                btn.classList.add("selected");
+                status.className = "success";
+                status.textContent = "Category thumbnail updated!";
+              } catch (err) {
+                status.className = "error";
+                status.textContent = `Error: ${err.message}`;
+              }
+            });
+
+            container.appendChild(btn);
+          });
+        } catch (err) {
+          status.className = "error";
+          status.textContent = `Error: ${err.message}`;
+        }
+      }
+
+      // ================================================================
+      // Portfolio picker
+      // ================================================================
+      async function renderPortfolioGrid(categoryId) {
+        const container = document.getElementById("portfolio-grid");
+        const status = document.getElementById("portfolio-status");
+        container.innerHTML = "";
+        status.textContent = "";
+        status.className = "";
+
+        if (!categoryId) {
+          container.hidden = true;
+          return;
+        }
+
+        try {
+          const [catData, portfolioData] = await Promise.all([
+            fetchCategoryData(),
+            fetchPortfolioData(),
+          ]);
+
+          const images = (catData.images || []).filter(
+            (img) => img.category === categoryId,
+          );
+          const featuredIds = new Set(
+            (portfolioData.favorites || []).map((f) => f.id),
+          );
+
+          if (!images.length) {
+            container.hidden = true;
+            status.textContent = "No images in this category.";
+            return;
+          }
+
+          container.hidden = false;
+
+          images.forEach((img) => {
+            const rawSrc = img.url || img.filename || "";
+            const resolved = rawSrc.startsWith("http")
+              ? rawSrc
+              : `./images/${rawSrc}`;
+            const isFeatured = featuredIds.has(img.id);
+
+            const item = document.createElement("div");
+            item.className =
+              "portfolio-pick-item" + (isFeatured ? " featured" : "");
+            item.innerHTML = `
+              <img src="${resolved}" alt="">
+              <span class="check">✓</span>
+            `;
+
+            item.addEventListener("click", async () => {
+              const willFeature = !item.classList.contains("featured");
+              status.className = "";
+              status.textContent = willFeature ? "Adding…" : "Removing…";
+
+              item.classList.toggle("featured", willFeature);
+
+              try {
+                await togglePortfolio(img.id, willFeature);
+                status.className = "success";
+                status.textContent = willFeature
+                  ? "Added to portfolio."
+                  : "Removed from portfolio.";
+                if (willFeature) featuredIds.add(img.id);
+                else featuredIds.delete(img.id);
+              } catch (err) {
+                item.classList.toggle("featured", !willFeature);
+                status.className = "error";
+                status.textContent = `Error: ${err.message}`;
+              }
+            });
+
+            container.appendChild(item);
+          });
+        } catch (err) {
+          status.className = "error";
+          status.textContent = `Error: ${err.message}`;
+        }
+      }
+
+      // ================================================================
+      // Manage categories
+      // ================================================================
+      async function renderManageCategories() {
+        const select = document.getElementById("manage-category");
+        const current = select.value;
+        select.innerHTML = '<option value="">Select a category</option>';
+
+        try {
+          const data = await fetchCategoryData();
+          const cats = (data.categories || [])
+            .slice()
+            .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+          const imgs = data.images || [];
+
+          cats.forEach((cat) => {
+            const count = imgs.filter((i) => i.category === cat.id).length;
+            const opt = document.createElement("option");
+            opt.value = cat.id;
+            opt.dataset.name = cat.name;
+            opt.dataset.count = count;
+            opt.textContent = `${cat.name} — ${count} image${count === 1 ? "" : "s"}`;
+            select.appendChild(opt);
+          });
+
+          if (current) select.value = current;
+        } catch (err) {
+          console.error("Failed to render manage categories", err);
+        }
+      }
+
+      // ================================================================
+      // Event listeners
+      // ================================================================
+
+      // Login
+      document
+        .getElementById("login-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("login-status");
+          status.className = "";
+          status.textContent = "Signing in…";
+
+          const password = document.getElementById("password").value;
+          try {
+            await login(password);
+            status.textContent = "";
+            showApp();
+          } catch (err) {
+            status.className = "error";
+            status.textContent = err.message;
+          }
+        });
+
+      // Logout
+      document
+        .getElementById("logout-btn")
+        .addEventListener("click", async () => {
+          await logout();
+          showLogin();
+        });
+
+      // Thumbnail category change
+      document
+        .getElementById("thumb-category")
+        .addEventListener("change", (e) => {
+          renderThumbnailPicker(e.target.value);
+        });
+
+      // Portfolio category change
+      document
+        .getElementById("portfolio-category")
+        .addEventListener("change", (e) => {
+          renderPortfolioGrid(e.target.value);
+        });
+
+      // Delete category button
+      document
+        .getElementById("delete-category-btn")
+        .addEventListener("click", async () => {
+          const select = document.getElementById("manage-category");
+          const opt = select.options[select.selectedIndex];
+          const id = select.value;
+          const status = document.getElementById("category-delete-status");
+          status.className = "";
+          status.textContent = "";
+
+          if (!id) {
+            status.className = "error";
+            status.textContent = "Please select a category first.";
+            return;
+          }
+
+          const name = opt.dataset.name;
+          const count = Number(opt.dataset.count);
+
+          if (!confirm(`Delete category "${name}"?`)) return;
+
+          try {
+            await deleteCategory(id, false);
+            status.className = "success";
+            status.textContent = `Category "${name}" deleted.`;
+          } catch (err) {
+            if (err.status === 409 && count > 0) {
+              const ok = confirm(
+                `"${name}" still has ${count} image(s). Deleting it will uncategorize them ` +
+                  `(the images themselves stay in your portfolio). Continue?`,
+              );
+              if (!ok) return;
+
+              try {
+                await deleteCategory(id, true);
+                status.className = "success";
+                status.textContent = `Category "${name}" deleted. ${count} image(s) uncategorized.`;
+              } catch (err2) {
+                status.className = "error";
+                status.textContent = `Error: ${err2.message}`;
+                return;
+              }
+            } else {
+              status.className = "error";
+              status.textContent = `Error: ${err.message}`;
+              return;
+            }
+          }
+
+          await loadCategories();
+          await loadThumbnailCategories();
+          await loadPortfolioCategories();
+          await renderThumbnailPicker(
+            document.getElementById("thumb-category").value,
+          );
+          await renderPortfolioGrid(
+            document.getElementById("portfolio-category").value,
+          );
+          await renderManageCategories();
+        });
+
+      // Upload form
+      document
+        .getElementById("upload-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("upload-status");
+          status.className = "";
+          status.textContent = "Uploading…";
+
+          const fileInput = document.getElementById("file");
+          const category = document.getElementById("category").value;
+          const description = document
+            .getElementById("description")
+            .value.trim();
+          const addToPortfolio =
+            document.getElementById("add-to-portfolio").checked;
+
+          if (!fileInput.files.length || !category || !description) {
+            status.className = "error";
+            status.textContent = "Please fill in all required fields.";
+            return;
+          }
+
+          try {
+            const file = await compressIfNeeded(fileInput.files[0]);
+            const result = await uploadImage(file, {
+              category,
+              description,
+              addToPortfolio,
+            });
+            status.className = "success";
+            status.innerHTML = `Upload complete — <a href="${result.url}" target="_blank" rel="noopener">view image</a>`;
+            e.target.reset();
+
+            await loadThumbnailCategories();
+            await renderThumbnailPicker(
+              document.getElementById("thumb-category").value,
+            );
+            await renderPortfolioGrid(
+              document.getElementById("portfolio-category").value,
+            );
+            await renderManageCategories();
+          } catch (err) {
+            status.className = "error";
+            status.textContent = `Error: ${err.message}`;
+          }
+        });
+
+      // Create category form
+      document
+        .getElementById("category-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const status = document.getElementById("category-status");
+          const name = document
+            .getElementById("new-category-name")
+            .value.trim();
+          if (!name) return;
+
+          status.className = "";
+          status.textContent = "Creating…";
+          try {
+            await createCategory(name);
+            status.className = "success";
+            status.textContent = "Category created!";
+            document.getElementById("new-category-name").value = "";
+
+            await loadCategories();
+            await loadThumbnailCategories();
+            await loadPortfolioCategories();
+            await renderManageCategories();
+          } catch (err) {
+            status.className = "error";
+            status.textContent = `Error: ${err.message}`;
+          }
+        });
+
+      // ================================================================
+      // ROUTING — must be last
+      // ================================================================
+      if (isLoggedIn()) {
+        showApp();
+      } else {
+        showLogin();
+      }
+    </script>
+  </body>
+</html>

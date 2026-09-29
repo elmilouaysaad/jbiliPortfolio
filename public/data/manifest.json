@@ -1,0 +1,90 @@
+{
+  "site": {
+    "name": "Mohammed Amine Jebli",
+    "footer": "© 2024 Mohammed Amine Jebli. All rights reserved.",
+    "nav": {
+      "home": "Home",
+      "portfolio": "Portfolio",
+      "browse": "Browse",
+      "contact": "Contact"
+    }
+  },
+  "pages": {
+    "home": {
+      "title": "Welcome",
+      "hero": {
+        "lead": "This is the creative portfolio of Mohamed Amine Jebli, a communication student at Al Akhawayn University."
+      },
+      "about": {
+        "heading": " ",
+        "backgroundHeading": "Background",
+        "background": [
+          "I am a communication student at Al Akhawayn University in Ifrane, Morocco. My passion lies in visual communication, design thinking, and creative storytelling. Through my work, I explore how design and visual elements can communicate meaningful ideas and create connections with audiences.",
+          "My creative interests span multiple disciplines including photography, graphic design, digital media, and visual art. I believe in the power of clean aesthetics and purposeful design to convey messages effectively."
+        ],
+        "philosophyHeading": "Creative Philosophy",
+        "philosophy": [
+          "I value minimalism and clarity in communication. I believe that great design removes the unnecessary and leaves only what matters—creating space for the message to shine through. Every visual element should serve a purpose and contribute to the overall narrative.",
+          "My goal is to create work that is both aesthetically refined and functionally meaningful, resonating with viewers through visual elegance and thoughtful composition."
+        ],
+        "experienceHeading": "Experience",
+        "experience": "Through my studies at Al Akhawayn University, I have developed expertise in visual communication, digital design, and multimedia projects. I have collaborated on various creative initiatives and have a strong foundation in design principles, content creation, and digital storytelling. I continue to explore and develop my creative practice across multiple visual mediums.",
+        "exploreHeading": "Explore My Work",
+        "explore": "Browse through my curated collection of projects spanning multiple disciplines—from graphic design and photography to digital media and visual art. Each piece reflects my passion for clean aesthetics, meaningful communication, and thoughtful design.",
+        "actions": {
+          "portfolio": "→ View Featured Works",
+          "browse": "→ Browse by Category",
+          "contact": "→ Contact Me"
+        }
+      }
+    },
+    "about": {
+      "title": " ",
+      "backgroundHeading": "Background",
+      "background": [
+        "I am a communication student at Al Akhawayn University in Ifrane, Morocco. My passion lies in visual communication, design thinking, and creative storytelling. Through my work, I explore how design and visual elements can communicate meaningful ideas and create connections with audiences.",
+        "My creative interests span multiple disciplines including photography, graphic design, digital media, and visual art. I believe in the power of clean aesthetics and purposeful design to convey messages effectively."
+      ],
+      "philosophyHeading": "Creative Philosophy",
+      "philosophy": [
+        "I value minimalism and clarity in communication. I believe that great design removes the unnecessary and leaves only what matters—creating space for the message to shine through. Every visual element should serve a purpose and contribute to the overall narrative.",
+        "My goal is to create work that is both aesthetically refined and functionally meaningful, resonating with viewers through visual elegance and thoughtful composition."
+      ],
+      "experienceHeading": "Experience",
+      "experience": "Through my studies at Al Akhawayn University, I have developed expertise in visual communication, digital design, and multimedia projects. I have collaborated on various creative initiatives and have a strong foundation in design principles, content creation, and digital storytelling. I continue to explore and develop my creative practice across multiple visual mediums.",
+      "actions": {
+        "portfolio": "→ View my Portfolio",
+        "browse": "→ Browse by Category"
+      }
+    },
+    "portfolio": {
+      "title": "Portfolio",
+      "description": "A curated selection of my most recent and significant works. Each piece represents my ongoing exploration of form, space, and visual balance."
+    },
+    "browse": {
+      "title": "Browse by Category",
+      "description": "Explore my complete body of work organized by subject matter and technique.",
+      "allLabel": "All",
+      "backButton": "← Back to Categories"
+    },
+    "contact": {
+      "title": "Contact",
+      "description": "I'm always interested in discussing commissions, collaborations, and exhibition opportunities. Feel free to reach out with any inquiries.",
+      "direct": {
+        "heading": "Direct Contact",
+        "emailLabel": "Email:",
+        "email": "Mo.jebli@aui.ma",
+        "phoneLabel": "Phone:",
+        "phone": "+212 6 53 28 11 76",
+        "instagramLabel": "Instagram:",
+        "instagram": "@eamine_jebli"
+      },
+      "form": {
+        "name": "Name",
+        "email": "Email",
+        "message": "Message",
+        "submit": "Send Message"
+      }
+    }
+  }
+}

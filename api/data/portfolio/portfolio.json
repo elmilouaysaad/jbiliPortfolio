@@ -1,0 +1,102 @@
+{
+  "favorites": [
+    {
+      "id": "img031",
+      "filename": "urban.jpg",
+      "category": "urban",
+      "order": 1,
+      "description": "Urban environment photograph added to Urban category."
+    },
+    {
+      "id": "img011",
+      "filename": "artwork_11.jpeg",
+      "category": "archi",
+      "order": 2,
+      "description": "Soft forms and delicate transitions create an ethereal quality. This abstract work explores the boundary between definition and ambiguity, inviting viewers into a contemplative space."
+    },
+    {
+      "id": "img017",
+      "filename": "DSCF9443.jpg",
+      "category": "archi",
+      "order": 3,
+      "description": "Abstract forms conveying emotional states rather than literal representation. This piece invites personal interpretation, allowing viewers to project their own experiences onto the composition."
+    },
+    {
+      "id": "img018",
+      "filename": "DSCF9561.jpg",
+      "category": "archi",
+      "order": 4,
+      "description": "Abstract forms conveying emotional states rather than literal representation. This piece invites personal interpretation, allowing viewers to project their own experiences onto the composition."
+    },
+    {
+      "id": "img020",
+      "filename": "DSCF9478 (1).jpg",
+      "category": "portraits",
+      "order": 5,
+      "description": "Abstract forms conveying emotional states rather than literal representation. This piece invites personal interpretation, allowing viewers to project their own experiences onto the composition."
+    },
+    {
+      "id": "img021",
+      "filename": "DSCF9498.jpg",
+      "category": "portraits",
+      "order": 6,
+      "description": "Salma is an architecture student at Université Internationale de Rabat."
+    },
+    {
+      "id": "img022",
+      "filename": "DSCF9795.jpg",
+      "category": "portraits",
+      "order": 7,
+      "description": "\"Lhouwya\" is a computer science student at Al Akhawayn University and an aspiring musician."
+    },
+    {
+      "id": "img023",
+      "filename": "belabbas.jpg",
+      "category": "event",
+      "order": 8,
+      "description": "Portrait study with a candid, documentary feel."
+    },
+    {
+      "id": "img024",
+      "filename": "cat.jpg",
+      "category": "street",
+      "order": 9,
+      "description": "Street scene featuring a cat in an urban setting."
+    },
+    {
+      "id": "img025",
+      "filename": "dude.jpg",
+      "category": "street",
+      "order": 10,
+      "description": "Street portrait with a casual, observed moment."
+    },
+    {
+      "id": "img027",
+      "filename": "event.jpg",
+      "category": "event",
+      "order": 11,
+      "description": "New event image added to the Events category."
+    },
+    {
+      "id": "img029",
+      "filename": "shadows.jpg",
+      "category": "shadow",
+      "order": 12,
+      "description": "High-contrast shadow study added to Shadows."
+    },
+    {
+      "id": "img030",
+      "filename": "street.jpg",
+      "category": "street",
+      "order": 13,
+      "description": "Street scene added to Streets category."
+    },
+    {
+      "id": "img033",
+      "filename": "street2.jpg",
+      "category": "street",
+      "order": 14,
+      "description": "Additional street scene added as street2."
+    }
+  ]
+}

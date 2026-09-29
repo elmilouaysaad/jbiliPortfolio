@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact | Mohamed Amine Jebli</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body data-page="contact">
+  <header>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="browse.html">Browse</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="contact">
+      <h2 id="contact-title">Contact</h2>
+      <p id="contact-description"></p>
+      <form id="contact-form">
+        <div class="form-group">
+          <label id="contact-name-label" for="name">Name</label>
+          <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-group">
+          <label id="contact-email-label" for="email">Email</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+          <label id="contact-message-label" for="message">Message</label>
+          <textarea id="message" name="message" required></textarea>
+        </div>
+        <button id="contact-submit" type="submit">Send Message</button>
+      </form>
+
+      <div style="margin-top: 4rem;">
+        <h3 id="contact-direct-heading">Direct Contact</h3>
+        <p id="contact-email-line">Email: <a href="mailto:aminejebli@example.com">aminejebli@example.com</a></p>
+        <p id="contact-phone-line">Phone: +212 6 XX XXX XXXX</p>
+        <p id="contact-instagram-line">Instagram: <a href="https://instagram.com" target="_blank">@aminejebli</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p id="site-footer"></p>
+  </footer>
+
+  <script src="./js/main.js"></script>
+</body>
+</html>
