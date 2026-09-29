@@ -3,7 +3,7 @@ FastAPI backend for the Jebli Portfolio.
 Deployed as a Vercel serverless function via api/index.py.
 
 Storage:
-- On Vercel: data is persisted to Vercel Blob.
+- On Vercel: data is persisted to Vercel Blob via REST API.
 - Locally:   data is persisted to api/data/*.json.
 On first read, if Blob is empty, the local seed files are copied to Blob.
 """
@@ -16,9 +16,7 @@ import time
 import asyncio
 import hmac
 import hashlib
-from functools import partial
 from typing import Optional
-import tempfile
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,11 +40,12 @@ SESSION_TTL_SECONDS = 12 * 60 * 60
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
-# Vercel Blob — detect either the classic token or the new OIDC token.
-BLOB_AVAILABLE = bool(
-    os.getenv("BLOB_READ_WRITE_TOKEN") or os.getenv("VERCEL_OIDC_TOKEN")
-)
-BLOB_ENABLED = BLOB_AVAILABLE
+# Vercel Blob via REST API — no SDK.
+BLOB_API = "https://blob.vercel-storage.com"
+BLOB_STATIC_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN")
+BLOB_OIDC_TOKEN = os.getenv("VERCEL_OIDC_TOKEN")
+BLOB_STORE_ID = os.getenv("BLOB_STORE_ID")
+BLOB_ENABLED = bool(BLOB_STATIC_TOKEN or BLOB_OIDC_TOKEN)
 
 CATEGORIES_BLOB = "categories.json"
 PORTFOLIO_BLOB = "portfolio.json"
@@ -81,73 +80,117 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------
-# Vercel Blob helpers (official SDK)
+# Vercel Blob REST helpers
 # ---------------------------------------------------------------
-if BLOB_ENABLED:
-    try:
-        from vercel import blob
-    except ImportError as e:
-        print(f"[blob] import failed, falling back to local storage: {e}")
-        BLOB_ENABLED = False
-
-# pathname -> public URL (avoids repeated list() calls on warm starts)
 _blob_url_cache: dict[str, str] = {}
+_blob_api_token_cache: Optional[str] = None
+
+
+async def _blob_api_token() -> Optional[str]:
+    """Return a token to use against the Blob REST API.
+
+    Uses the static token if present; otherwise the OIDC token, which
+    Vercel's Blob API accepts directly as a Bearer credential.
+    """
+    global _blob_api_token_cache
+    if _blob_api_token_cache:
+        return _blob_api_token_cache
+
+    if BLOB_STATIC_TOKEN:
+        _blob_api_token_cache = BLOB_STATIC_TOKEN
+        return _blob_api_token_cache
+
+    if BLOB_OIDC_TOKEN:
+        _blob_api_token_cache = BLOB_OIDC_TOKEN
+        return _blob_api_token_cache
+
+    return None
 
 
 async def _read_blob(pathname: str) -> Optional[bytes]:
     if not BLOB_ENABLED:
         return None
+
+    token = await _blob_api_token()
+    if not token:
+        return None
+
     try:
         url = _blob_url_cache.get(pathname)
         if not url:
-            result = await asyncio.to_thread(
-                partial(blob.list, {"prefix": pathname, "limit": 100})
-            )
-            blobs = result if isinstance(result, list) else result.get("blobs", [])
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "x-api-version": "7",
+            }
+            if BLOB_STORE_ID:
+                headers["x-vercel-blob-store-id"] = BLOB_STORE_ID
+
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    BLOB_API,
+                    params={"prefix": pathname, "limit": 100},
+                    headers=headers,
+                )
+
+            if r.status_code != 200:
+                print(f"[blob] list failed {r.status_code}: {r.text[:300]}")
+                return None
+
+            try:
+                payload = r.json()
+            except Exception:
+                print(f"[blob] list non-JSON: {r.text[:300]}")
+                return None
+
+            blobs = payload.get("blobs", [])
             for b in blobs:
                 if b.get("pathname") == pathname and b.get("url"):
                     url = b["url"]
                     _blob_url_cache[pathname] = url
                     break
+
         if not url:
             return None
+
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url)
             if r.status_code == 200:
                 return r.content
+            print(f"[blob] download failed {r.status_code}")
     except Exception as e:
         print(f"[blob] read error for {pathname}: {e}")
     return None
 
 
-
 async def _write_blob(pathname: str, data: bytes) -> bool:
     if not BLOB_ENABLED:
         return False
+
+    token = await _blob_api_token()
+    if not token:
+        return False
+
     try:
-        # Vercel's serverless filesystem is read-only except for /tmp.
-        tmp_dir = "/tmp" if os.path.isdir("/tmp") else tempfile.gettempdir()
-        tmp_path = os.path.join(
-            tmp_dir, f"vercel-blob-{secrets.token_hex(8)}.json"
-        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "x-api-version": "7",
+            "x-content-type": "application/json",
+            "x-add-random-suffix": "0",
+            "x-cache-control-max-age": "60",
+        }
+        if BLOB_STORE_ID:
+            headers["x-vercel-blob-store-id"] = BLOB_STORE_ID
 
-        with open(tmp_path, "wb") as f:
-            f.write(data)
-
-        try:
-            await asyncio.to_thread(
-                partial(
-                    blob.upload_file,
-                    local_path=tmp_path,
-                    path=pathname,
-                    access="public",
-                )
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.put(
+                f"{BLOB_API}/{pathname}",
+                content=data,
+                headers=headers,
             )
-        finally:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+
+        if r.status_code not in (200, 201):
+            print(f"[blob] put failed {r.status_code}: {r.text[:300]}")
+            return False
 
         _blob_url_cache.pop(pathname, None)
         return True
@@ -155,11 +198,11 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
         print(f"[blob] write error for {pathname}: {e}")
         return False
 
+
 # ---------------------------------------------------------------
 # JSON I/O
 # ---------------------------------------------------------------
 async def _load_json(blob_pathname: str, local_path: str, default: dict) -> dict:
-    # 1. Blob
     content = await _read_blob(blob_pathname)
     if content is not None:
         try:
@@ -167,7 +210,6 @@ async def _load_json(blob_pathname: str, local_path: str, default: dict) -> dict
         except json.JSONDecodeError as e:
             print(f"[json] bad blob {blob_pathname}: {e}")
 
-    # 2. Local seed
     if os.path.exists(local_path):
         try:
             with open(local_path, "r", encoding="utf-8") as f:
@@ -189,6 +231,7 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
     if BLOB_ENABLED:
         if await _write_blob(blob_pathname, payload):
             return
+        print(f"[json] blob write failed for {blob_pathname}, falling back to local")
 
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -245,7 +288,6 @@ def _record_failed_attempt(ip: str):
 
 
 def _sign(payload: str) -> str:
-    """HMAC-SHA256 signature of the payload, using ADMIN_PASSWORD as the key."""
     return hmac.new(
         ADMIN_PASSWORD.encode("utf-8"),
         payload.encode("utf-8"),
@@ -254,14 +296,12 @@ def _sign(payload: str) -> str:
 
 
 def _make_token() -> str:
-    """Create a token: '<expiry_timestamp>.<signature>'. No server-side storage."""
     expiry = int(time.time()) + SESSION_TTL_SECONDS
     payload = str(expiry)
     return f"{payload}.{_sign(payload)}"
 
 
 def _verify_token(token: str) -> bool:
-    """Check that a token is well-formed, unexpired, and correctly signed."""
     if not token or "." not in token:
         return False
     payload, _, signature = token.partition(".")
@@ -277,12 +317,9 @@ def _verify_token(token: str) -> bool:
 async def require_auth(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or malformed token.")
-
     token = authorization.removeprefix("Bearer ").strip()
-
     if not _verify_token(token):
         raise HTTPException(status_code=401, detail="Session expired or invalid.")
-
     return token
 
 
@@ -324,8 +361,9 @@ async def health():
     return {
         "status": "ok",
         "blob": BLOB_ENABLED,
-        "has_static_token": bool(os.getenv("BLOB_READ_WRITE_TOKEN")),
-        "has_oidc_token": bool(os.getenv("VERCEL_OIDC_TOKEN")),
+        "has_static_token": bool(BLOB_STATIC_TOKEN),
+        "has_oidc_token": bool(BLOB_OIDC_TOKEN),
+        "has_store_id": bool(BLOB_STORE_ID),
     }
 
 
@@ -348,26 +386,21 @@ async def login(
     request_ip: str = Header(None, alias="X-Forwarded-For"),
 ):
     ip = request_ip or "local"
-
     if _is_rate_limited(ip):
         raise HTTPException(
             status_code=429,
             detail="Too many failed attempts. Try again in a few minutes.",
         )
-
     if not secrets.compare_digest(req.password, ADMIN_PASSWORD):
         _record_failed_attempt(ip)
         raise HTTPException(status_code=401, detail="Invalid password.")
-
     token = _make_token()
     _login_attempts.pop(ip, None)
-
     return {"token": token, "expires_in": SESSION_TTL_SECONDS}
 
 
 @app.post("/api/logout")
 async def logout(_token: str = Depends(require_auth)):
-    # Stateless tokens can't be revoked server-side; the client just discards it.
     return {"status": "ok"}
 
 
@@ -391,7 +424,7 @@ async def upload_image(
             status_code=413,
             detail=(
                 f"Image is {len(contents) / 1024 / 1024:.1f} MB — "
-                "exceeds ImgBB's 32 MB limit. Compress it and try again."
+                "exceeds ImgBB's 32 MB limit."
             ),
         )
 

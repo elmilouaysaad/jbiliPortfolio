@@ -3,4 +3,3 @@ uvicorn[standard]
 httpx
 python-multipart
 python-dotenv
-vercel
