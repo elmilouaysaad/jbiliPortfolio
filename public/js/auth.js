@@ -1,7 +1,7 @@
 const API_BASE =
-  location.hostname === "localhost" || location.hostname === "127.0.0.1"
-    ? "http://localhost:8000"
-    : "";const TOKEN_KEY = "portfolio_admin_token";
+  location.port === "5500" || location.port === "3000"
+    ? `${location.protocol}//${location.hostname}:8000`
+    : "";
 
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY);
