@@ -4,28 +4,46 @@ const API_BASE =
   location.port === "5500" || location.port === "3000"
     ? `${location.protocol}//${location.hostname}:8000`
     : "";
+// 1. Import the client-side upload helper from Vercel
+import { upload } from 'https://esm.sh/@vercel/blob@0.27.3/client';
 
 export async function uploadImage(file, metadata) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("category", metadata.category);
-  formData.append("description", metadata.description);
-  formData.append("add_to_portfolio", metadata.addToPortfolio ? "true" : "false");
-
-  const res = await fetch(`${API_BASE}/api/upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: formData,
-  });
-
-  if (handleAuthError(res)) throw new Error("Session expired. Please log in again.");
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Upload failed (${res.status})`);
+  // --- PART 1: Upload the file directly to Vercel Blob ---
+  let blobResult;
+  try {
+    blobResult = await upload(file.name, file, {
+      access: 'public',
+      handleUploadUrl: `${API_BASE}/api/upload/blob-token`,
+      // Pass your auth token in a custom header
+      headers: authHeaders(), 
+    });
+  } catch (error) {
+    console.error("Direct upload to Vercel Blob failed:", error);
+    throw new Error(error.message || "Upload failed. Please try again.");
   }
 
-  return res.json();
+  // --- PART 2: Save the image metadata to your JSON database ---
+  const metadataRes = await fetch(`${API_BASE}/api/upload/metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({
+      blobUrl: blobResult.url,
+      category: metadata.category,
+      description: metadata.description,
+      addToPortfolio: metadata.addToPortfolio,
+    }),
+  });
+
+  if (handleAuthError(metadataRes)) {
+    throw new Error("Session expired. Please log in again.");
+  }
+
+  if (!metadataRes.ok) {
+    const err = await metadataRes.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to save image metadata (${metadataRes.status})`);
+  }
+
+  return metadataRes.json();
 }
 
 export async function createCategory(name) {

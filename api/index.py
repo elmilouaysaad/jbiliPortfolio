@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import httpx
+from vercel.blob import handle_upload, HandleUploadBody
 
 load_dotenv()
 
@@ -649,3 +650,78 @@ async def toggle_portfolio(req: PortfolioToggle, _token: str = Depends(require_a
         return {"status": "ok", "featured": False}
 
     return {"status": "ok", "featured": req.featured, "no_change": True}
+@app.post("/api/upload/blob-token")
+async def upload_blob_token(
+    body: HandleUploadBody,
+    _token: str = Depends(require_auth), # Protect this route with your admin auth
+):
+    """
+    Generate a short-lived, signed token for the browser to upload
+    a file directly to Vercel Blob.
+    """
+    try:
+        json_response = await handle_upload(
+            body,
+            on_before_generate_token=lambda client_payload, _: {
+                "allowOverwrite": True,
+                "addRandomSuffix": False,
+                "maximumSizeInBytes": 100 * 1024 * 1024, # 100 MB limit
+                "allowedContentTypes": ["image/jpeg", "image/png", "image/webp"],
+            },
+        )
+        return json_response
+    except Exception as e:
+        print(f"[blob-token] Error generating token: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate upload token.")
+# Add this new model for the metadata
+class ImageMetadata(BaseModel):
+    blobUrl: str
+    category: str
+    description: str
+    addToPortfolio: bool = False
+
+# Add this new route
+@app.post("/api/upload/metadata")
+async def save_image_metadata(
+    req: ImageMetadata,
+    _token: str = Depends(require_auth),
+):
+    """Saves metadata for an image that was uploaded directly to Blob."""
+    # The 'blobUrl' is now the 'url' and 'filename'
+    image_url = req.blobUrl
+    
+    # We use the ImgBB ID format for consistency, but we'll use the blob URL
+    # Or, you can generate a unique ID from the URL itself.
+    imgbb_id = image_url.split('/')[-1] # Extract filename from URL
+
+    categories_data = await _load_categories()
+    images = categories_data.get("images", [])
+    images.append({
+        "id": f"img_{imgbb_id}",
+        "filename": image_url,
+        "url": image_url,
+        "thumb": image_url, # Since we are no longer using ImgBB, use the same URL
+        "medium": image_url,
+        "category": req.category,
+        "description": req.description,
+    })
+    categories_data["images"] = images
+    await _save_categories(categories_data)
+
+    if req.addToPortfolio:
+        portfolio = await _load_portfolio()
+        favorites = portfolio.get("favorites", [])
+        favorites.append({
+            "id": f"img_{imgbb_id}",
+            "filename": image_url,
+            "url": image_url,
+            "thumb": image_url,
+            "medium": image_url,
+            "category": req.category,
+            "order": _next_order(favorites),
+            "description": req.description,
+        })
+        portfolio["favorites"] = favorites
+        await _save_portfolio(portfolio)
+
+    return {"status": "ok", "id": img_bb_id, "url": image_url}
