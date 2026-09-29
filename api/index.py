@@ -13,7 +13,6 @@ import json
 import base64
 import secrets
 import time
-import asyncio
 import hmac
 import hashlib
 from typing import Optional
@@ -23,7 +22,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import httpx
-from vercel.blob import handle_upload, HandleUploadBody
 
 load_dotenv()
 
@@ -41,7 +39,7 @@ SESSION_TTL_SECONDS = 12 * 60 * 60
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
-# Vercel Blob via REST API — no SDK.
+# Vercel Blob via REST API
 BLOB_API = "https://blob.vercel-storage.com"
 BLOB_STATIC_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN")
 BLOB_OIDC_TOKEN = os.getenv("VERCEL_OIDC_TOKEN")
@@ -88,11 +86,7 @@ _blob_api_token_cache: Optional[str] = None
 
 
 async def _blob_api_token() -> Optional[str]:
-    """Return a token to use against the Blob REST API.
-
-    Uses the static token if present; otherwise the OIDC token, which
-    Vercel's Blob API accepts directly as a Bearer credential.
-    """
+    """Return a token to use against the Blob REST API."""
     global _blob_api_token_cache
     if _blob_api_token_cache:
         return _blob_api_token_cache
@@ -177,11 +171,8 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
             "Authorization": f"Bearer {token}",
             "x-api-version": "7",
             "Content-Type": "application/json",
-            # Do NOT append a random suffix — use the exact pathname.
             "x-add-random-suffix": "0",
-            # Allow replacing the existing file at that pathname.
             "x-allow-overwrite": "1",
-            # Cache for 60s; the admin reloads will see fresh data.
             "x-cache-control-max-age": "60",
         }
 
@@ -201,6 +192,7 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
     except Exception as e:
         print(f"[blob] write exception for {pathname}: {type(e).__name__}: {e}")
         return False
+
 
 # ---------------------------------------------------------------
 # JSON I/O
@@ -234,13 +226,11 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
     if BLOB_ENABLED:
         ok = await _write_blob(blob_pathname, payload)
         if not ok:
-            # Do NOT silently fall back to local — on Vercel the local write
-            # lands in /tmp and is lost the moment the function returns.
             raise HTTPException(
                 status_code=500,
                 detail=(
                     f"Blob write failed for {blob_pathname}. "
-                    "Check the [blob] put failed line in the Vercel function logs."
+                    "Check the [blob] PUT response line in the Vercel function logs."
                 ),
             )
         return
@@ -253,6 +243,8 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
     except OSError as e:
         print(f"[json] local write error for {local_path}: {e}")
         raise HTTPException(status_code=500, detail="Failed to persist data.")
+
+
 async def _load_categories() -> dict:
     return await _load_json(
         CATEGORIES_BLOB, LOCAL_CATEGORIES_PATH, {"categories": [], "images": []}
@@ -416,7 +408,7 @@ async def logout(_token: str = Depends(require_auth)):
 
 
 # ---------------------------------------------------------------
-# Upload
+# Upload (ImgBB, compressed client-side to fit Vercel's 4.5 MB limit)
 # ---------------------------------------------------------------
 @app.post("/api/upload")
 async def upload_image(
@@ -650,78 +642,3 @@ async def toggle_portfolio(req: PortfolioToggle, _token: str = Depends(require_a
         return {"status": "ok", "featured": False}
 
     return {"status": "ok", "featured": req.featured, "no_change": True}
-@app.post("/api/upload/blob-token")
-async def upload_blob_token(
-    body: HandleUploadBody,
-    _token: str = Depends(require_auth), # Protect this route with your admin auth
-):
-    """
-    Generate a short-lived, signed token for the browser to upload
-    a file directly to Vercel Blob.
-    """
-    try:
-        json_response = await handle_upload(
-            body,
-            on_before_generate_token=lambda client_payload, _: {
-                "allowOverwrite": True,
-                "addRandomSuffix": False,
-                "maximumSizeInBytes": 100 * 1024 * 1024, # 100 MB limit
-                "allowedContentTypes": ["image/jpeg", "image/png", "image/webp"],
-            },
-        )
-        return json_response
-    except Exception as e:
-        print(f"[blob-token] Error generating token: {e}")
-        raise HTTPException(status_code=500, detail="Could not generate upload token.")
-# Add this new model for the metadata
-class ImageMetadata(BaseModel):
-    blobUrl: str
-    category: str
-    description: str
-    addToPortfolio: bool = False
-
-# Add this new route
-@app.post("/api/upload/metadata")
-async def save_image_metadata(
-    req: ImageMetadata,
-    _token: str = Depends(require_auth),
-):
-    """Saves metadata for an image that was uploaded directly to Blob."""
-    # The 'blobUrl' is now the 'url' and 'filename'
-    image_url = req.blobUrl
-    
-    # We use the ImgBB ID format for consistency, but we'll use the blob URL
-    # Or, you can generate a unique ID from the URL itself.
-    imgbb_id = image_url.split('/')[-1] # Extract filename from URL
-
-    categories_data = await _load_categories()
-    images = categories_data.get("images", [])
-    images.append({
-        "id": f"img_{imgbb_id}",
-        "filename": image_url,
-        "url": image_url,
-        "thumb": image_url, # Since we are no longer using ImgBB, use the same URL
-        "medium": image_url,
-        "category": req.category,
-        "description": req.description,
-    })
-    categories_data["images"] = images
-    await _save_categories(categories_data)
-
-    if req.addToPortfolio:
-        portfolio = await _load_portfolio()
-        favorites = portfolio.get("favorites", [])
-        favorites.append({
-            "id": f"img_{imgbb_id}",
-            "filename": image_url,
-            "url": image_url,
-            "thumb": image_url,
-            "medium": image_url,
-            "category": req.category,
-            "order": _next_order(favorites),
-            "description": req.description,
-        })
-        portfolio["favorites"] = favorites
-        await _save_portfolio(portfolio)
-
-    return {"status": "ok", "id": img_bb_id, "url": image_url}

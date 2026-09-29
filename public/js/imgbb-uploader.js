@@ -4,46 +4,28 @@ const API_BASE =
   location.port === "5500" || location.port === "3000"
     ? `${location.protocol}//${location.hostname}:8000`
     : "";
-// 1. Import the client-side upload helper from Vercel
-import { upload } from 'https://esm.sh/@vercel/blob@0.27.3/client';
 
 export async function uploadImage(file, metadata) {
-  // --- PART 1: Upload the file directly to Vercel Blob ---
-  let blobResult;
-  try {
-    blobResult = await upload(file.name, file, {
-      access: 'public',
-      handleUploadUrl: `${API_BASE}/api/upload/blob-token`,
-      // Pass your auth token in a custom header
-      headers: authHeaders(), 
-    });
-  } catch (error) {
-    console.error("Direct upload to Vercel Blob failed:", error);
-    throw new Error(error.message || "Upload failed. Please try again.");
-  }
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("category", metadata.category);
+  formData.append("description", metadata.description);
+  formData.append("add_to_portfolio", metadata.addToPortfolio ? "true" : "false");
 
-  // --- PART 2: Save the image metadata to your JSON database ---
-  const metadataRes = await fetch(`${API_BASE}/api/upload/metadata`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({
-      blobUrl: blobResult.url,
-      category: metadata.category,
-      description: metadata.description,
-      addToPortfolio: metadata.addToPortfolio,
-    }),
+  const res = await fetch(`${API_BASE}/api/upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
   });
 
-  if (handleAuthError(metadataRes)) {
-    throw new Error("Session expired. Please log in again.");
+  if (handleAuthError(res)) throw new Error("Session expired. Please log in again.");
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Upload failed (${res.status})`);
   }
 
-  if (!metadataRes.ok) {
-    const err = await metadataRes.json().catch(() => ({}));
-    throw new Error(err.detail || `Failed to save image metadata (${metadataRes.status})`);
-  }
-
-  return metadataRes.json();
+  return res.json();
 }
 
 export async function createCategory(name) {
@@ -63,22 +45,34 @@ export async function createCategory(name) {
   return res.json();
 }
 
-export async function compressIfNeeded(file, limitMB = 30) {
+/**
+ * Compress a file to fit under Vercel's 4.5 MB function body limit.
+ * Target: 3.5 MB — leaves headroom for multipart overhead.
+ */
+export async function compressIfNeeded(file, limitMB = 3.5) {
   if (file.size / 1024 / 1024 <= limitMB) return file;
+
   try {
     const mod = await import(
       "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.mjs"
     );
-    return await mod.default(file, {
+    const compressed = await mod.default(file, {
       maxSizeMB: limitMB,
       maxWidthOrHeight: 6000,
       useWebWorker: true,
+      initialQuality: 0.9,
     });
+    console.log(
+      `Compressed: ${(file.size / 1024 / 1024).toFixed(2)} MB → ` +
+      `${(compressed.size / 1024 / 1024).toFixed(2)} MB`
+    );
+    return compressed;
   } catch (err) {
     console.warn("Compression failed, uploading original.", err);
     return file;
   }
 }
+
 export async function setCategoryThumbnail(categoryId, imageUrl) {
   const res = await fetch(`${API_BASE}/api/category/thumbnail`, {
     method: "POST",
@@ -95,6 +89,7 @@ export async function setCategoryThumbnail(categoryId, imageUrl) {
 
   return res.json();
 }
+
 export async function deleteCategory(categoryId, force = false) {
   const res = await fetch(`${API_BASE}/api/category/delete`, {
     method: "POST",
@@ -107,12 +102,13 @@ export async function deleteCategory(categoryId, force = false) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const e = new Error(err.detail || `Failed to delete category (${res.status})`);
-    e.status = res.status;   // so the caller can detect the 409 case
+    e.status = res.status;
     throw e;
   }
 
   return res.json();
 }
+
 export async function deleteImage(imageId) {
   const res = await fetch(`${API_BASE}/api/image/delete`, {
     method: "POST",
@@ -129,6 +125,7 @@ export async function deleteImage(imageId) {
 
   return res.json();
 }
+
 export async function togglePortfolio(imageId, featured) {
   const res = await fetch(`${API_BASE}/api/portfolio/toggle`, {
     method: "POST",
