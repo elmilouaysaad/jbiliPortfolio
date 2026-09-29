@@ -18,6 +18,7 @@ import hmac
 import hashlib
 from functools import partial
 from typing import Optional
+import tempfile
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -119,24 +120,40 @@ async def _read_blob(pathname: str) -> Optional[bytes]:
     return None
 
 
+
 async def _write_blob(pathname: str, data: bytes) -> bool:
     if not BLOB_ENABLED:
         return False
     try:
-        await asyncio.to_thread(
-            partial(
-                blob.upload_file,
-                local_path=data,
-                path=pathname,
-                access="public",
-                allow_overwrite=True,
-            )
+        # Vercel's serverless filesystem is read-only except for /tmp.
+        tmp_dir = "/tmp" if os.path.isdir("/tmp") else tempfile.gettempdir()
+        tmp_path = os.path.join(
+            tmp_dir, f"vercel-blob-{secrets.token_hex(8)}.json"
         )
+
+        with open(tmp_path, "wb") as f:
+            f.write(data)
+
+        try:
+            await asyncio.to_thread(
+                partial(
+                    blob.upload_file,
+                    local_path=tmp_path,
+                    path=pathname,
+                    access="public",
+                )
+            )
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
         _blob_url_cache.pop(pathname, None)
         return True
     except Exception as e:
         print(f"[blob] write error for {pathname}: {e}")
-        return False 
+        return False
 
 # ---------------------------------------------------------------
 # JSON I/O
