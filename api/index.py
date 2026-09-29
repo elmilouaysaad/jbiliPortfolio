@@ -174,12 +174,8 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
         headers = {
             "Authorization": f"Bearer {token}",
             "x-api-version": "7",
-            "x-content-type": "application/json",
-            "x-add-random-suffix": "0",
-            "x-cache-control-max-age": "60",
+            "Content-Type": "application/json",
         }
-        if BLOB_STORE_ID:
-            headers["x-vercel-blob-store-id"] = BLOB_STORE_ID
 
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.put(
@@ -189,7 +185,8 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
             )
 
         if r.status_code not in (200, 201):
-            print(f"[blob] put failed {r.status_code}: {r.text[:300]}")
+            # Print the exact rejection so we can see it in Vercel logs
+            print(f"[blob] put failed {r.status_code}: {r.text[:500]}")
             return False
 
         _blob_url_cache.pop(pathname, None)
