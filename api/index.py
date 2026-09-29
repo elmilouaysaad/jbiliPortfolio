@@ -136,7 +136,7 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
         return True
     except Exception as e:
         print(f"[blob] write error for {pathname}: {e}")
-        return False
+        return False 
 
 # ---------------------------------------------------------------
 # JSON I/O
