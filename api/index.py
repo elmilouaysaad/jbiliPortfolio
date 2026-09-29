@@ -39,9 +39,13 @@ SESSION_TTL_SECONDS = 12 * 60 * 60
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
-# Vercel Blob
-BLOB_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN")
-BLOB_ENABLED = bool(BLOB_TOKEN)
+# Vercel Blob — detect either the classic token or the new OIDC token.
+BLOB_AVAILABLE = bool(
+    os.getenv("BLOB_READ_WRITE_TOKEN") or os.getenv("VERCEL_OIDC_TOKEN")
+)
+# A separate switch lets us force-disable blob in edge cases.
+BLOB_ENABLED = BLOB_AVAILABLE
+
 CATEGORIES_BLOB = "categories.json"
 PORTFOLIO_BLOB = "portfolio.json"
 
@@ -75,10 +79,14 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------
-# Vercel Blob helpers
+# Vercel Blob helpers (official SDK)
 # ---------------------------------------------------------------
 if BLOB_ENABLED:
-    from vercel_blob import put as _blob_put, list as _blob_list
+    try:
+        from vercel import blob
+    except ImportError as e:
+        print(f"[blob] import failed, falling back to local storage: {e}")
+        BLOB_ENABLED = False
 
 # pathname -> public URL (avoids repeated list() calls on warm starts)
 _blob_url_cache: dict[str, str] = {}
@@ -91,7 +99,7 @@ async def _read_blob(pathname: str) -> Optional[bytes]:
         url = _blob_url_cache.get(pathname)
         if not url:
             result = await asyncio.to_thread(
-                partial(_blob_list, {"prefix": pathname, "limit": 100})
+                partial(blob.list, {"prefix": pathname, "limit": 100})
             )
             blobs = result if isinstance(result, list) else result.get("blobs", [])
             for b in blobs:
@@ -116,7 +124,7 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
     try:
         await asyncio.to_thread(
             partial(
-                _blob_put,
+                blob.put,
                 pathname,
                 data,
                 options={
@@ -127,7 +135,6 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
                 },
             )
         )
-        # Invalidate cache so the next read picks up the new version.
         _blob_url_cache.pop(pathname, None)
         return True
     except Exception as e:
@@ -152,7 +159,6 @@ async def _load_json(blob_pathname: str, local_path: str, default: dict) -> dict
         try:
             with open(local_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # Seed Blob so future reads hit it directly.
             await _write_blob(
                 blob_pathname,
                 json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"),
@@ -171,7 +177,6 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
         if await _write_blob(blob_pathname, payload):
             return
 
-    # Local fallback
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
@@ -283,7 +288,12 @@ class PortfolioToggle(BaseModel):
 # ---------------------------------------------------------------
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "blob": BLOB_ENABLED}
+    return {
+        "status": "ok",
+        "blob": BLOB_ENABLED,
+        "has_static_token": bool(os.getenv("BLOB_READ_WRITE_TOKEN")),
+        "has_oidc_token": bool(os.getenv("VERCEL_OIDC_TOKEN")),
+    }
 
 
 @app.get("/api/data/categories")
