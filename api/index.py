@@ -14,6 +14,8 @@ import base64
 import secrets
 import time
 import asyncio
+import hmac
+import hashlib
 from functools import partial
 from typing import Optional
 
@@ -43,7 +45,6 @@ LOGIN_WINDOW_SECONDS = 15 * 60
 BLOB_AVAILABLE = bool(
     os.getenv("BLOB_READ_WRITE_TOKEN") or os.getenv("VERCEL_OIDC_TOKEN")
 )
-# A separate switch lets us force-disable blob in edge cases.
 BLOB_ENABLED = BLOB_AVAILABLE
 
 CATEGORIES_BLOB = "categories.json"
@@ -124,15 +125,11 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
     try:
         await asyncio.to_thread(
             partial(
-                blob.put,
-                pathname,
-                data,
-                options={
-                    "access": "public",
-                    "addRandomSuffix": False,
-                    "allowOverwrite": True,
-                    "contentType": "application/json",
-                },
+                blob.upload_file,
+                local_path=data,
+                path=pathname,
+                access="public",
+                allow_overwrite=True,
             )
         )
         _blob_url_cache.pop(pathname, None)
@@ -140,7 +137,6 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
     except Exception as e:
         print(f"[blob] write error for {pathname}: {e}")
         return False
-
 
 # ---------------------------------------------------------------
 # JSON I/O
@@ -211,17 +207,9 @@ def _next_order(favorites: list) -> int:
 
 
 # ---------------------------------------------------------------
-# Auth
+# Auth — stateless HMAC-signed tokens
 # ---------------------------------------------------------------
-_sessions: dict[str, float] = {}
 _login_attempts: dict[str, list[float]] = {}
-
-
-def _prune_sessions():
-    now = time.time()
-    for token in list(_sessions.keys()):
-        if _sessions[token] < now:
-            del _sessions[token]
 
 
 def _prune_attempts(ip: str):
@@ -239,15 +227,43 @@ def _record_failed_attempt(ip: str):
     _login_attempts.setdefault(ip, []).append(time.time())
 
 
+def _sign(payload: str) -> str:
+    """HMAC-SHA256 signature of the payload, using ADMIN_PASSWORD as the key."""
+    return hmac.new(
+        ADMIN_PASSWORD.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _make_token() -> str:
+    """Create a token: '<expiry_timestamp>.<signature>'. No server-side storage."""
+    expiry = int(time.time()) + SESSION_TTL_SECONDS
+    payload = str(expiry)
+    return f"{payload}.{_sign(payload)}"
+
+
+def _verify_token(token: str) -> bool:
+    """Check that a token is well-formed, unexpired, and correctly signed."""
+    if not token or "." not in token:
+        return False
+    payload, _, signature = token.partition(".")
+    if not hmac.compare_digest(signature, _sign(payload)):
+        return False
+    try:
+        expiry = int(payload)
+    except ValueError:
+        return False
+    return expiry > time.time()
+
+
 async def require_auth(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or malformed token.")
 
     token = authorization.removeprefix("Bearer ").strip()
-    _prune_sessions()
 
-    expiry = _sessions.get(token)
-    if not expiry or expiry < time.time():
+    if not _verify_token(token):
         raise HTTPException(status_code=401, detail="Session expired or invalid.")
 
     return token
@@ -326,16 +342,15 @@ async def login(
         _record_failed_attempt(ip)
         raise HTTPException(status_code=401, detail="Invalid password.")
 
-    token = secrets.token_urlsafe(32)
-    _sessions[token] = time.time() + SESSION_TTL_SECONDS
+    token = _make_token()
     _login_attempts.pop(ip, None)
 
     return {"token": token, "expires_in": SESSION_TTL_SECONDS}
 
 
 @app.post("/api/logout")
-async def logout(token: str = Depends(require_auth)):
-    _sessions.pop(token, None)
+async def logout(_token: str = Depends(require_auth)):
+    # Stateless tokens can't be revoked server-side; the client just discards it.
     return {"status": "ok"}
 
 
