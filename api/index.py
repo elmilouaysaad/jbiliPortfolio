@@ -168,6 +168,7 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
 
     token = await _blob_api_token()
     if not token:
+        print("[blob] no token available")
         return False
 
     try:
@@ -177,25 +178,22 @@ async def _write_blob(pathname: str, data: bytes) -> bool:
             "Content-Type": "application/json",
         }
 
+        url = f"{BLOB_API}/{pathname}"
+        print(f"[blob] PUT {url} ({len(data)} bytes)")
+
         async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.put(
-                f"{BLOB_API}/{pathname}",
-                content=data,
-                headers=headers,
-            )
+            r = await client.put(url, content=data, headers=headers)
+
+        print(f"[blob] PUT response: {r.status_code} {r.text[:500]}")
 
         if r.status_code not in (200, 201):
-            # Print the exact rejection so we can see it in Vercel logs
-            print(f"[blob] put failed {r.status_code}: {r.text[:500]}")
             return False
 
         _blob_url_cache.pop(pathname, None)
         return True
     except Exception as e:
-        print(f"[blob] write error for {pathname}: {e}")
+        print(f"[blob] write exception for {pathname}: {type(e).__name__}: {e}")
         return False
-
-
 # ---------------------------------------------------------------
 # JSON I/O
 # ---------------------------------------------------------------
@@ -226,10 +224,20 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
     payload = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
 
     if BLOB_ENABLED:
-        if await _write_blob(blob_pathname, payload):
-            return
-        print(f"[json] blob write failed for {blob_pathname}, falling back to local")
+        ok = await _write_blob(blob_pathname, payload)
+        if not ok:
+            # Do NOT silently fall back to local — on Vercel the local write
+            # lands in /tmp and is lost the moment the function returns.
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Blob write failed for {blob_pathname}. "
+                    "Check the [blob] put failed line in the Vercel function logs."
+                ),
+            )
+        return
 
+    # Local-only mode (development). Writes go to api/data/*.json.
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
@@ -237,8 +245,6 @@ async def _save_json(blob_pathname: str, local_path: str, data: dict) -> None:
     except OSError as e:
         print(f"[json] local write error for {local_path}: {e}")
         raise HTTPException(status_code=500, detail="Failed to persist data.")
-
-
 async def _load_categories() -> dict:
     return await _load_json(
         CATEGORIES_BLOB, LOCAL_CATEGORIES_PATH, {"categories": [], "images": []}
